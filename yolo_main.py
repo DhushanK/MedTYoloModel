@@ -5,7 +5,7 @@ import time
 from gpiozero import DistanceSensor
 from gpiozero.pins.pigpio import PiGPIOFactory
 
-# Use pigpio for better ultrasonic accuracy
+# Use pigpio for better ultrasonic accuracy hello
 factory = PiGPIOFactory()
 
 # YOLO Setup
@@ -21,9 +21,9 @@ width = 1280
 height = 720
 
 # Ultrasonic Sensors
-sensorA = DistanceSensor(echo=3, trigger=2, max_distance=5, pin_factory=factory)
-sensorB = DistanceSensor(echo=5, trigger=4, max_distance=5, pin_factory=factory)
-sensorC = DistanceSensor(echo=27, trigger=17, max_distance=5, pin_factory=factory)
+sensorA = DistanceSensor(echo=17, trigger=27, max_distance=5, pin_factory=factory)
+sensorB = DistanceSensor(echo=22, trigger=23, max_distance=5, pin_factory=factory)
+sensorC = DistanceSensor(echo=24, trigger=25, max_distance=5, pin_factory=factory)
 
 # Sensor Settings
 DETECTION_THRESHOLD = 50  # cm
@@ -31,7 +31,14 @@ DISTANCE_TOLERANCE = 5    # cm
 
 def get_distance(sensor):
     try:
-        return round(sensor.distance * 100, 2)
+        start_time = time.time()
+        distance = round(sensor.distance * 100, 2)
+
+        if time.time() - start_time > 0.3 or distance == 0:
+            print("[DISTANCE WARNING] Timeout or invalid reading.")
+            return 999
+
+        return distance
     except Exception as e:
         print(f"[ULTRASONIC ERROR] {e}")
         return 999
@@ -88,16 +95,16 @@ def main():
     while True:
         print(f"[FRAME] Processing frame at {round(time.time(), 2)}")
 
+        frame = picam2.capture_array()
+        results = model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False, conf=0.1)
+        annotated_frame = results[0].plot()
+        boxes = results[0].boxes
+
         current_time = time.time()
         if current_time - last_ultra_time >= ultra_interval:
             last_zone_name, last_distance = get_ultrasonic_zone()
             last_ultra_time = current_time
             print(f"[ULTRA] Zone: {last_zone_name} | Distance: {last_distance} cm")
-
-        frame = picam2.capture_array()
-        results = model.track(frame, persist=True, tracker="bytetrack.yaml", verbose=False, conf=0.1)
-        annotated_frame = results[0].plot()
-        boxes = results[0].boxes
 
         zone_name = last_zone_name
         distance = last_distance
