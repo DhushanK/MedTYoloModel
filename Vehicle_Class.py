@@ -1,6 +1,10 @@
-import math, winsound
+import math, winsound, time, threading
+from Headphones import play_sound
 
 class Vehicle:
+    width = 1200
+    fov = 160
+
     tracked_vehicles = {}
 
     def __init__(self, v_id: int, position: tuple, area: float, centre: tuple):
@@ -8,9 +12,9 @@ class Vehicle:
         self.positions = [position]
         self.areas = [area]
         self.centres = [centre]
+        self.distances = []
         
-        width = 1280 # Might have to change
-        if self.centres[0][0] < width / 2:
+        if self.centres[0][0] < Vehicle.width / 2:
             self.direction = "left"
         else:
             self.direction = "right"
@@ -41,8 +45,7 @@ class Vehicle:
         self.areas = vehicle.get_areas() + self.areas
         self.centres = vehicle.get_centres() + self.centres
         
-        width = 1280 # Might have to change
-        if self.centres[-1][0] < width / 2:
+        if self.centres[-1][0] < Vehicle.width / 2:
             self.direction = "left"
         else:
             self.direction = "right"
@@ -73,14 +76,41 @@ class Vehicle:
         distance = self.get_position_change()
         area = self.get_area_change()
         direction = self.get_direction()
+        speed = 50 * self.get_distance_change()
+
         print(f"Distance: {distance}, Area: {area}")
 
-        if distance > 10 or area > 1000:  # area threshold may have to change
-            #frequency = 2500  # Set Frequency To 2500 Hertz
-            #duration = 100  # Set Duration To 1000 ms == 1 second
-            #winsound.Beep(frequency, duration)
-
+        if distance > 10 or area > 1000 or speed > 10:  # area threshold may have to change
+            threading.Thread(target=play_sound, args=(False,), daemon=True).start()
+            
             return False, f"Warning, vehicle id {self.v_id} moving in {direction} direction, Distance: {distance}, Area: {area}\n"
         else:
-            self.signal_safe()
             return True, "Safe to cross"
+    
+    def get_distance(self):
+        x = self.centres[-1][0]
+        y = self.centres[-1][1]
+
+        # ultrasonic function call here
+        # distance = function(x, y)
+        
+        # self.distances.append(distance)
+    
+    def get_distance_change(self):
+        if len(self.distances) < 2:
+            return 0
+        else:
+            theta1 = (self.centres[-2][0] - Vehicle.width/2) / Vehicle.width * Vehicle.fov
+            theta1 = math.radians(theta1)
+            theta2 = (self.centres[-1][0] - Vehicle.width/2) / Vehicle.width * Vehicle.fov
+            theta2 = math.radians(theta2)
+
+            dist1 = self.distances[-2]
+            dist2 = self.distances[-1]
+
+            x1 = dist1 * math.sin(theta1)
+            x2 = dist2 * math.sin(theta2)
+
+            dist_change = x2 - x1
+            
+            return dist_change
