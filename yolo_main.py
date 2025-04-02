@@ -5,7 +5,7 @@ import time
 from gpiozero import DistanceSensor
 from gpiozero.pins.pigpio import PiGPIOFactory
 
-# Use pigpio for better ultrasonic accuracy hello
+# Use pigpio for better ultrasonic accuracy
 factory = PiGPIOFactory()
 
 # YOLO Setup
@@ -31,13 +31,14 @@ DISTANCE_TOLERANCE = 5    # cm
 
 def get_distance(sensor):
     try:
-        start_time = time.time()
-        distance = round(sensor.distance * 100, 2)
-
-        if time.time() - start_time > 0.3 or distance == 0:
-            print("[DISTANCE WARNING] Timeout or invalid reading.")
+        if not sensor.distance_available:
+            print("[DISTANCE WARNING] No echo — skipping.")
             return 999
 
+        distance = round(sensor.distance * 100, 2)
+        if distance == 0:
+            print("[DISTANCE WARNING] Invalid reading (0).")
+            return 999
         return distance
     except Exception as e:
         print(f"[ULTRASONIC ERROR] {e}")
@@ -48,7 +49,9 @@ def is_same_object(d1, d2):
 
 def get_ultrasonic_zone():
     d1 = get_distance(sensorA)
+    time.sleep(0.001)
     d2 = get_distance(sensorB)
+    time.sleep(0.001)
     d3 = get_distance(sensorC)
 
     obj1 = d1 < DETECTION_THRESHOLD
