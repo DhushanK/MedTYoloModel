@@ -1,5 +1,4 @@
-import math, winsound, time, threading
-from Headphones import play_sound
+import math, time, threading
 
 class Vehicle:
     width = 1200
@@ -81,8 +80,6 @@ class Vehicle:
         print(f"Distance: {distance}, Area: {area}")
 
         if distance > 10 or area > 1000 or speed > 10:  # area threshold may have to change
-            threading.Thread(target=play_sound, args=(False,), daemon=True).start()
-            
             return False, f"Warning, vehicle id {self.v_id} moving in {direction} direction, Distance: {distance}, Area: {area}\n"
         else:
             return True, "Safe to cross"
