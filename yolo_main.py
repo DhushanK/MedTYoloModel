@@ -3,10 +3,6 @@ import cv2
 from Vehicle_Class import Vehicle
 import time
 from gpiozero import DistanceSensor
-from gpiozero.pins.pigpio import PiGPIOFactory
-
-# Use pigpio for better ultrasonic accuracy
-factory = PiGPIOFactory()
 
 # YOLO Setup
 model = YOLO("yolo11n.pt")
@@ -20,21 +16,14 @@ picam2.start()
 width = 1280
 height = 720
 
-# Ultrasonic Sensors
-sensorA = DistanceSensor(echo=17, trigger=27, max_distance=5, pin_factory=factory)
-sensorB = DistanceSensor(echo=22, trigger=23, max_distance=5, pin_factory=factory)
-sensorC = DistanceSensor(echo=24, trigger=25, max_distance=5, pin_factory=factory)
+# Ultrasonic Sensor using default GPIO backend
+sensor = DistanceSensor(echo=17, trigger=27, max_distance=2.0)
 
 # Sensor Settings
 DETECTION_THRESHOLD = 50  # cm
-DISTANCE_TOLERANCE = 5    # cm
 
-def get_distance(sensor):
+def get_distance():
     try:
-        if not sensor.distance_available:
-            print("[DISTANCE WARNING] No echo — skipping.")
-            return 999
-
         distance = round(sensor.distance * 100, 2)
         if distance == 0:
             print("[DISTANCE WARNING] Invalid reading (0).")
@@ -43,37 +32,6 @@ def get_distance(sensor):
     except Exception as e:
         print(f"[ULTRASONIC ERROR] {e}")
         return 999
-
-def is_same_object(d1, d2):
-    return abs(d1 - d2) <= DISTANCE_TOLERANCE
-
-def get_ultrasonic_zone():
-    d1 = get_distance(sensorA)
-    time.sleep(0.001)
-    d2 = get_distance(sensorB)
-    time.sleep(0.001)
-    d3 = get_distance(sensorC)
-
-    obj1 = d1 < DETECTION_THRESHOLD
-    obj2 = d2 < DETECTION_THRESHOLD
-    obj3 = d3 < DETECTION_THRESHOLD
-
-    if obj1 and obj2 and obj3 and is_same_object(d1, d2) and is_same_object(d2, d3):
-        return "center_overlap", round((d1 + d2 + d3) / 3, 2)
-    elif obj1 and obj2 and is_same_object(d1, d2):
-        return "between_left_middle", round((d1 + d2) / 2, 2)
-    elif obj2 and obj3 and is_same_object(d2, d3):
-        return "between_middle_right", round((d2 + d3) / 2, 2)
-    elif obj1 and obj3 and is_same_object(d1, d3):
-        return "upper_left_overlap", round((d1 + d3) / 2, 2)
-    elif obj1:
-        return "left_only", d1
-    elif obj2:
-        return "middle_only", d2
-    elif obj3:
-        return "right_only", d3
-    else:
-        return "none", 999
 
 def get_vehicle(box):
     vehicle_list = ["car", "motorcycle", "bicycle", "bus", "truck", "person"]
@@ -90,11 +48,6 @@ def get_vehicle(box):
     return None
 
 def main():
-    last_zone_name = "none"
-    last_distance = 999
-    last_ultra_time = time.time()
-    ultra_interval = 0.5  # 500ms
-
     while True:
         print(f"[FRAME] Processing frame at {round(time.time(), 2)}")
 
@@ -103,47 +56,19 @@ def main():
         annotated_frame = results[0].plot()
         boxes = results[0].boxes
 
-        current_time = time.time()
-        if current_time - last_ultra_time >= ultra_interval:
-            last_zone_name, last_distance = get_ultrasonic_zone()
-            last_ultra_time = current_time
-            print(f"[ULTRA] Zone: {last_zone_name} | Distance: {last_distance} cm")
-
-        zone_name = last_zone_name
-        distance = last_distance
-
-        pixel_to_ultrasonic_map = {
-            "left": ["left_only", "upper_left_overlap", "between_left_middle", "center_overlap"],
-            "middle": ["center_overlap", "middle_only", "between_left_middle", "between_middle_right"],
-            "right": ["right_only", "between_middle_right", "center_overlap"],
-        }
+        distance = get_distance()
+        print(f"[ULTRASONIC] Distance: {distance} cm")
 
         for box in boxes:
             vehicle = get_vehicle(box)
             if vehicle:
-                x = vehicle.centres[-1][0]
-
-                if x < width / 3:
-                    pixel_zone = "left"
-                elif x < 2 * width / 3:
-                    pixel_zone = "middle"
-                else:
-                    pixel_zone = "right"
-
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
+                classname = names[int(box.cls)].upper()
+                label = f"{classname} | Distance: {distance} cm"
 
-                print(f"[YOLO] Detected {vehicle.classname.upper()} ID:{vehicle.v_id} in pixel zone: {pixel_zone}")
-                print(f"[DEBUG] YOLO zone: {pixel_zone} | Ultrasonic zone: {zone_name}")
+                print(f"[YOLO] {label}")
 
-                label = f"{vehicle.classname.upper()}"
-
-                if zone_name in pixel_to_ultrasonic_map[pixel_zone]:
-                    print(f"[✓] MATCH — {vehicle.classname.upper()} in {pixel_zone} — {distance} cm")
-                    label += f" | Distance: {distance} cm"
-                else:
-                    print(f"[NO MATCH] — {vehicle.classname.upper()} in {pixel_zone} | Sensor zone: {zone_name} | Distance: {distance} cm")
-
-                # Draw bounding box and label on annotated frame
+                # Draw bounding box and label
                 cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(annotated_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
